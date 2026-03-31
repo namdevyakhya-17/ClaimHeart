@@ -15,17 +15,17 @@ flowchart LR
     %% =========================
 
     subgraph USERS["Stakeholders"]
-        PAT["Patient User\nTracks claim status,\nreads letters,\nuploads extra documents"]
-        HOS["Hospital / TPA Staff\nSubmits pre-auth,\ndischarge docs,\nresponds to queries"]
-        INS["Insurance Reviewer\nDoctor panel,\nclaims ops,\nfinal decision owner"]
+        PAT["Patient User\ninsured member / caregiver\ntracks claim progress, reads letters, uploads missing medical docs\nreceives decisions, alerts, and next steps"]
+        HOS["Hospital / TPA Staff\nprovider-side operations team\nsubmits pre-auth/discharge files, answers insurer queries\ncompletes evidence package for adjudication"]
+        INS["Insurance Reviewer\nmedical + claims review team\nassesses policy fit, fraud signals, and final recommendation\napproves, queries, denies, or escalates"]
     end
 
     subgraph FRONTEND["Frontend Experience - Next.js"]
-        PD["Patient Dashboard\nTimeline, status,\nletters, uploads,\nappeal actions"]
-        HD["Hospital / TPA Dashboard\nClaim intake, query inbox,\nmissing docs,\nTAT clock"]
-        ID["Insurer Dashboard\nFraud queue,\npolicy evidence,\ndecision controls,\naudit view"]
-        UI["Shared UI Shell\nRole router,\npage layouts,\nworkspace composition"]
-        STATE["Client State + API Client\nSession state,\nrequest handling,\ncache and refresh"]
+        PD["Patient Dashboard\npatient-facing claim workspace\nclaim timeline, decision letters, pending document requests\nuploads files, responds to queries, initiates appeal"]
+        HD["Hospital / TPA Dashboard\nprovider submission workspace\nintake status, insurer query inbox, document gaps, TAT timer\nuploads medical/billing evidence and closes queries"]
+        ID["Insurer Dashboard\nreviewer control panel\npolicy evidence, fraud queue, SLA risk, audit trail\nreviews packet, requests clarification, finalizes disposition"]
+        UI["Shared UI Shell\nrole-aware navigation and layout layer\nroutes users to correct modules and guards protected pages\nconsistent workflow across all personas"]
+        STATE["Client State + API Client\nfrontend data/control layer\nmanages auth/session, sends API requests, caches responses\nsynchronized UI with retry and refresh behavior"]
     end
 
     %% =========================
@@ -33,15 +33,15 @@ flowchart LR
     %% =========================
 
     subgraph BACKEND["Backend Core - FastAPI + Celery"]
-        APIGW["API Gateway\nRBAC, validation,\nrouting, claim stage control"]
-        CLAIMSVC["Claim Service\nCreate/update claims,\nstore metadata,\ndispatch workflows"]
-        POLICYSVC["Policy Service\nPolicy upload,\nindex status,\nretrieval support"]
-        FRAUDSVC["Fraud Service\nRisk queries,\nreview actions,\nfraud retrieval"]
-        LETTERSVC["Letter Service\nDraft review,\nletter edits,\ncommunication history"]
-        USERSVC["User/Auth Service\nIdentity,\nsession,\nrole resolution"]
-        QUEUE["Redis Queue"]
-        WORKER["Celery Workers"]
-        ORCH["Claim Orchestrator\nFan-out, retries,\nworkflow state,\nparallel coordination"]
+        APIGW["API Gateway\nsecure backend entry point\nperforms RBAC checks, schema validation, request routing, and stage guardrails\nonly valid, authorized actions reach services"]
+        CLAIMSVC["Claim Service\ncentral claim lifecycle service\ncreates/updates claims, persists metadata, triggers processing jobs\ncanonical claim record with stage progression"]
+        POLICYSVC["Policy Service\npolicy ingestion/retrieval service\naccepts policy files, tracks index status, provides clause retrieval\nsearchable policy knowledge for adjudication"]
+        FRAUDSVC["Fraud Service\nfraud operations service\nfetches risk signals, stores review notes, exposes fraud evidence APIs\ninvestigator-ready risk context"]
+        LETTERSVC["Letter Service\ncommunication generation service\nmanages draft templates, edits, approvals, and dispatch history\ntraceable member/provider communications"]
+        USERSVC["User/Auth Service\nidentity and access service\nauthenticates users, resolves roles, issues/validates sessions\npersona-specific secure access"]
+        QUEUE["Redis Queue\nasync job transport\nbuffers claim-processing tasks for worker pickup\nreliable decoupled execution"]
+        WORKER["Celery Workers\nbackground execution pool\nruns extraction, analysis, and communication jobs\nscalable non-blocking processing"]
+        ORCH["Claim Orchestrator\nworkflow controller for claim pipeline\nfans out agent tasks, coordinates retries, tracks workflow state\ndeterministic parallel processing and completion"]
     end
 
     %% =========================
@@ -49,15 +49,15 @@ flowchart LR
     %% =========================
 
     subgraph AGENTS["Committee of Specialized Agents - Run in Parallel"]
-        REDACT["PII Redaction Layer\nMask identity fields\nbefore model-heavy processing"]
-        EXTRACT["Extractor Agent\nPDF parsing + OCR/Vision\ninto structured claim JSON"]
-        CONTEXT["Claim Context Builder\nCombine medical facts,\nbilling, policy metadata,\nclaim history, stage state"]
-        POLICY["Policy RAG Agent\nCoverage rules,\nsub-limits, exclusions,\nwaiting periods, citations"]
-        FRAUD["Fraud Investigator Agent\nDuplicate checks,\nbaseline variance,\nrule engine, anomaly logic"]
-        TAT["TAT Monitor Agent\nSLA timer,\nbreach warning,\ndelay reason, escalation"]
-        MERGE["Decision Aggregator\nMerge policy, fraud,\nand TAT outputs into\none explainable decision packet"]
-        MEDIATOR["Mediator Agent\nPatient letter,\nhospital query,\ninsurer summary,\ndelay explanation"]
-        FIELDTRIGGER["Field Verification Trigger\nEscalate high-risk or\nunverifiable cases"]
+        REDACT["Pre-Processing: PII Redaction\nprivacy guard before AI analysis\ndetects/masks identifiers (name, contact, IDs) in documents\ncompliant inputs for downstream models"]
+        EXTRACT["Agent 1 - Extractor Agent\ndocument-to-structure converter\nparses PDFs/images via OCR/vision and normalizes claim fields\nstructured claim JSON + extracted entities"]
+        CONTEXT["Shared Claim Context Builder\nunified evidence assembly layer\nmerges extraction output, history, billing, policy refs, and stage data\none context object for all specialist agents"]
+        POLICY["Agent 2 - Policy RAG Agent\npolicy eligibility evaluator\nretrieves relevant clauses and tests coverage/sub-limits/exclusions\ndecision rationale with exact clause citations"]
+        FRAUD["Agent 3 - Fraud Investigator Agent\nrisk and anomaly analyst\nruns duplicate/provider-pattern checks and baseline variance tests\nfraud score, evidence list, and review recommendation"]
+        TAT["Agent 4 - TAT Monitor Agent\nSLA compliance monitor\ncomputes elapsed time, detects bottlenecks, flags breach risk\nwarning level, delay reason, escalation signals"]
+        MERGE["Decision Core - Aggregator\nexplainable decision synthesizer\ncombines policy, fraud, and TAT outputs with conflict resolution\nsingle auditable decision packet for action"]
+        MEDIATOR["Agent 5 - Mediator Agent\nmulti-party communication composer\ngenerates patient letter, provider query, insurer summary\nchannel-ready, role-specific, explainable messaging"]
+        FIELDTRIGGER["Escalation Layer - Field Verification Trigger\nmanual verification gateway\nroutes high-risk/unverifiable claims to on-ground checks\nadditional evidence before final closure"]
     end
 
     %% =========================
@@ -65,12 +65,12 @@ flowchart LR
     %% =========================
 
     subgraph DATA["Data and Knowledge Layer"]
-        DB[("PostgreSQL Claim DB\nClaims, statuses,\nagent outputs, letters,\nfraud flags, stage history")]
-        DOCS["Document Store / S3\nRaw PDFs, images,\nredacted copies,\nsupporting reports"]
-        VECTOR["Policy Vector Store\nEmbeddings,\nretrieval nodes,\nsource citations"]
-        BASELINE["Cost Baselines + Clinical Rules\nRegional tariffs,\nroom rent caps,\ntest protocol limits"]
-        AUDIT["Audit Ledger\nMachine actions,\nhuman overrides,\ndecision history"]
-        CACHE["Redis Cache + Timers\nSession cache,\nTAT counters,\njob coordination"]
+        DB[("PostgreSQL Claim DB\nsystem-of-record transactional database\nclaims, stages, outputs, letters, flags, verification results\ndashboards, APIs, and workflow continuity")]
+        DOCS["Document Store / S3\ndurable object storage\nraw uploads, redacted copies, images, reports\nextraction, audits, and evidence replay"]
+        VECTOR["Policy Vector Store\nsemantic retrieval index for policy text\nembeddings/chunks with metadata + citations\nclause-grounded policy analysis"]
+        BASELINE["Cost Baselines + Clinical Rules\nfraud reference knowledge base\nregional tariffs, room caps, treatment protocol norms\nanomaly and overbilling detection"]
+        AUDIT["Audit Ledger\nimmutable action history\nmachine decisions, human overrides, timestamps, reasons\ngovernance, compliance, and dispute defense"]
+        CACHE["Redis Cache + Timers\nlow-latency operational state\nSLA counters, transient session data, queue coordination state\nfast checks and orchestration timing"]
     end
 
     %% =========================
@@ -78,10 +78,10 @@ flowchart LR
     %% =========================
 
     subgraph EXTERNAL["External Sources and Output Channels"]
-        POLICYPDF["Policy PDFs"]
-        INGEST["Policy Chunking + Embedding Pipeline"]
-        NOTIFY["SMS / Email / Push / In-App Alerts"]
-        FIELDAGENT["Physical Field Agent\nOn-ground hospital verification"]
+        POLICYPDF["Policy PDFs\nsource contract documents\ncoverage terms, exclusions, limits, riders"]
+        INGEST["Policy Chunking + Embedding Pipeline\npolicy preprocessing workflow\nsplits, cleans, embeds, and indexes policy text\nsearchable vector knowledge"]
+        NOTIFY["SMS / Email / Push / In-App Alerts\noutbound communication channels\ndecisions, pending-action reminders, escalation notices"]
+        FIELDAGENT["Physical Field Agent\nexternal verification resource\nperforms on-ground hospital and document authenticity checks\nverification findings and discrepancy notes"]
     end
 
     %% =========================
@@ -199,3 +199,4 @@ flowchart LR
     class DB,DOCS,VECTOR,BASELINE,AUDIT,CACHE data;
     class POLICYPDF,INGEST,NOTIFY,FIELDAGENT ext;
 ```
+
