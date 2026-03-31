@@ -614,65 +614,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── PRICING ───────────────────────────────────────────────────────── */}
-      <section id="pricing" className="bg-[var(--ch-surface)] px-6 py-24 md:px-12 lg:px-20">
-        <div className="mx-auto max-w-7xl">
-          <div className="mx-auto mb-14 max-w-3xl text-center">
-            <h2 className="text-[2rem] font-bold tracking-[-0.03em] text-slate-900 md:text-[2.2rem]">
-              Simple, Transparent Pricing
-            </h2>
-            <p className="mt-5 text-base leading-8 text-[var(--ch-muted)] md:text-lg">
-              No hidden fees. No per-agent charges. Pay for claims processed.
-            </p>
-          </div>
-          <div className="grid items-stretch gap-6 md:grid-cols-3">
-            {pricingPlans.map((plan) => (
-              <article
-                key={plan.name}
-                className={`relative rounded-[1.75rem] border p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 ${
-                  plan.highlight
-                    ? "bg-[linear-gradient(135deg,#2f6fb2_0%,#4a8edb_100%)] border-transparent"
-                    : `bg-white ${plan.borderClass}`
-                }`}
-              >
-                {plan.badge && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-400 px-4 py-1 text-[11px] font-bold text-white shadow">
-                    {plan.badge}
-                  </span>
-                )}
-                <p className={`text-sm font-semibold ${plan.highlight ? "text-white/70" : "text-[var(--ch-subtle)]"}`}>
-                  {plan.name}
-                </p>
-                <div className="mt-3 flex items-baseline gap-1">
-                  <span className={`text-4xl font-bold tracking-[-0.04em] ${plan.highlight ? "text-white" : "text-slate-900"}`}>
-                    {plan.price}
-                  </span>
-                  <span className={`text-sm ${plan.highlight ? "text-white/60" : "text-[var(--ch-subtle)]"}`}>
-                    {plan.period}
-                  </span>
-                </div>
-                <p className={`mt-3 text-sm leading-6 ${plan.highlight ? "text-white/70" : "text-[var(--ch-muted)]"}`}>
-                  {plan.desc}
-                </p>
-                <div className={`my-6 h-px ${plan.highlight ? "bg-white/15" : "bg-slate-100"}`} />
-                <ul className="space-y-3">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2.5">
-                      <CheckCircle2 className={`h-4 w-4 shrink-0 ${plan.highlight ? "text-blue-200" : "text-green-500"}`} />
-                      <span className={`text-sm ${plan.highlight ? "text-white/85" : "text-slate-600"}`}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  className={`mt-8 w-full rounded-2xl py-3 text-sm font-semibold transition hover:opacity-90 ${plan.ctaClass}`}
-                >
-                  {plan.cta}
-                </button>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ── FAQ ───────────────────────────────────────────────────────────── */}
       <section className="bg-white px-6 py-24 md:px-12 lg:px-20">
