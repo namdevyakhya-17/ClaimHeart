@@ -521,7 +521,7 @@ export default function DashboardPage() {
                       className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       <Mail className="h-4 w-4" />
-                      {sendingEmail ? "Sending email..." : activeClaim.emails?.length ? "Send email" : "Send to registered email"}
+                      {sendingEmail ? "Sending email..." : activeClaim.emails?.length ? "Send email" : "Send email"}
                     </button>
                   ) : null}
                 </div>
