@@ -1,23 +1,8 @@
-<<<<<<< HEAD
-# AI & LLM
-google-genai
-python-dotenv
-
-# OCR & Image Processing
-pytesseract
-pdf2image
-opencv-python
-Pillow
-pydantic
-
-# Utilities
-numpy
-requests
-=======
+# WEB FRAMEWORK
 fastapi
 uvicorn[standard]
 python-multipart
-
+pydantic
 
 # DATABASE
 sqlalchemy
@@ -28,11 +13,8 @@ alembic
 python-jose[cryptography]
 passlib[bcrypt]
 
-
 # ENVIRONMENT
-
 python-dotenv
-
 
 # OCR & IMAGE PROCESSING
 pytesseract
@@ -41,12 +23,11 @@ opencv-python
 pillow
 numpy
 
-# PDF PROCESSING (VERY IMPORTANT)
+# PDF PROCESSING
 pdf2image
 PyMuPDF
 
-
-# NLP / LLM (Gemini) // geranl rakha h sandy add kar diyo baki 
+# AI & LLM
 google-generativeai
 
 # TASK QUEUE 
@@ -56,8 +37,4 @@ redis
 # UTILITIES
 requests
 tqdm
-
-#url image :
 httpx==0.26.0
-
->>>>>>> 4da34a8910ab9fabc30671f032a8877e5260e57b

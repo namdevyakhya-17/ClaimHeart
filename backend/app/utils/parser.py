@@ -1,116 +1,384 @@
-# def parse_medical_text(text):
-#     import re
-
-#     data = {}
-
-#     # billing cost extraction...
-#     cost_matches = re.findall(r'\$\s?\d+\.?\d*', text)
-
-#     if cost_matches:
-#         costs = [float(c.replace("$", "").strip()) for c in cost_matches]
-#         data["estimated_cost"] = max(costs)
-
-#     # Days
-#     days_match = re.search(r'(\d+)\s*(days|day)', text.lower())
-#     if days_match:
-#         data["duration_days"] = int(days_match.group(1))
-
-#     # treatment keywords detect ...
-#     if "exam" in text.lower():
-#         data["treatment"] = "exam"
-#     elif "x-ray" in text.lower():
-#         data["treatment"] = "x-ray"
-
-#     return data
-
-
 import re
 from typing import Dict, List, Optional
+from datetime import datetime
 
-def clean_number(text: str) -> Optional[float]:
-    """Extract and clean numeric values, handling OCR artifacts like 'o' for '0' or 'z' for '2'"""
-    # Basic OCR correction
-    cleaned = text.lower().replace('o', '0').replace('z', '2').replace('s', '5')
-    cleaned = re.sub(r'[^\d.]', '', cleaned)
+
+def extract_patient_name(text: str) -> Optional[str]:
+    """Extract patient name from common patterns"""
+    # Look for name patterns - OCR often splits lines
+    patterns = [
+        r'([A-Z][a-z]+)\s+([A-Z][a-z]+)\s+\(ICD',  # Mehta Arjun (ICD - reversed order
+        r'([A-Z][a-z]+)\s*\n\s*([A-Z][a-z]+)\s+\(ICD',  # Name split across lines
+        r'patient\s*name\s*[:\-]?\s*([A-Z][a-z]+\s+[A-Z][a-z]+)',
+        r'name\s*[:\-]?\s*([A-Z][a-z]+\s+[A-Z][a-z]+)',
+        r'([A-Z][a-z]+)\s+([A-Z][a-z]+)\s+(?:Male|Female|years)',
+    ]
     
-    if cleaned:
-        try:
-            return float(cleaned)
-        except:
-            return None
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            if len(match.groups()) == 2:
+                # Two separate groups - check if it's reversed (last name first)
+                first = match.group(1).strip()
+                second = match.group(2).strip()
+                
+                # If pattern includes (ICD, it's likely reversed (Mehta Arjun)
+                if '(ICD' in pattern:
+                    name = f"{second} {first}"  # Reverse to Arjun Mehta
+                else:
+                    name = f"{first} {second}"
+            else:
+                name = match.group(1).strip()
+            
+            # Clean up
+            name = name.replace('=', '').replace('(', '').replace(')', '').strip()
+            
+            # Filter out false positives
+            false_positives = ['patient', 'name', 'record', 'fever', 'diagnosis', 
+                             'with', 'detalls', 'medical', 'hospital', 'date', 
+                             'outpatient', 'prescription', 'dengue', 'iyer', 'yakeb']
+            
+            if len(name) > 3 and not any(x in name.lower() for x in false_positives):
+                return name
+    
     return None
 
-def parse_medical_text(raw_text: str) -> Dict:
-    lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+
+def extract_age(text: str) -> Optional[int]:
+    """Extract age from text"""
+    patterns = [
+        r'age\s*[:\-]?\s*(\d+)',
+        r'(\d+)\s*(?:years?|yrs?|y\.?o\.?)',
+        r'(\d+)\s*-?\s*(?:year|yr)',
+        r'(\d+)\s*-?\s*yu\s*ur-old',  # OCR artifact for "year old"
+    ]
     
-    data = {
-        "hospital_name": "Patient Medical Bill", # Defaulting as per your desired output
-        "patient_name": None,
-        "medications_and_services": [],
-        "total_amount": None
-    }
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            age = int(match.group(1))
+            if 0 < age < 120:
+                return age
+    return None
 
-    service_keywords = {
-        "pharmacy": "Medication (Pills/Tablets)",
-        "drug": "Medication (General)",
-        "bed": "Hospital Stay",
-        "laboratory": "Laboratory Test",
-        "test": "Laboratory Test",
-        "theatre": "Surgery/Theatre",
-        "procedure": "Surgery/Theatre",
-        "feeding": "Feeding/Nutrition",
-        "therapy": "Therapy",
-        "fotc": "Therapy",
-        "immuniz": "Vaccination/Immunization",
-        "specialist": "Specialist Consultation"
-    }
 
-    for i, line in enumerate(lines):
-        line_lower = line.lower()
-        
-        # 1. HANDLE TOTALS
-        if "total" in line_lower:
-            all_nums = []
-            # Look at this line and next 2 lines for totals
-            for search_idx in range(i, min(i + 4, len(lines))):
-                found = re.findall(r'\d[\d,\.ozs]*', lines[search_idx])
-                for f in found:
-                    val = clean_number(f)
-                    if val and val > 1000: all_nums.append(val)
+def extract_gender(text: str) -> Optional[str]:
+    """Extract gender/sex from text"""
+    patterns = [
+        r'(?:sex|gender)\s*[:\-]?\s*(male|female|m|f|turnule)',
+        r'\b(male|female)\b',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            gender = match.group(1).lower()
+            if 'f' in gender or 'turnule' in gender:
+                return "Female"
+            elif 'm' in gender:
+                return "Male"
+    return None
+
+
+def extract_medical_record_number(text: str) -> Optional[str]:
+    """Extract medical record number"""
+    patterns = [
+        r'(?:medical\s*)?record\s*(?:number|no|#)\s*[:\-]?\s*([A-Z0-9\-]+)',
+        r'veteal\s*recordnuinbcr\s*[:\-]?\s*(\d+)',
+        r'patient\s*id\s*[:\-]?\s*([A-Z0-9\-]+)',
+        r'(?:no|number)\s*[:\.]+\s*([A-Z0-9\-]{5,})',
+        r'CCH-OPD-\d+-\d+',
+        r'[A-Z]{2,}-[A-Z]{3}-\d{4}-\d{5}',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            mrn = match.group(0) if 'CCH' in match.group(0) else match.group(1)
+            return mrn.strip()
+    return None
+
+
+def extract_dates(text: str) -> Dict[str, Optional[str]]:
+    """Extract admission, discharge, and other dates"""
+    dates = {
+        "admission_date": None,
+        "discharge_date": None,
+        "bill_date": None,
+        "prescription_date": None
+    }
+    
+    # Look for "05 April 2026" or "April 05 2026" patterns
+    date_patterns = [
+        r'(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})',
+        r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})',
+        r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
+    ]
+    
+    # Admission date patterns
+    admission_patterns = [
+        r'(?:date\s*of\s*)?admission\s*[:\-]?\s*([A-Za-z]+\s+\d+,?\s*\d{4})',
+        r'admitted\s*(?:on)?\s*[:\-]?\s*([A-Za-z]+\s+\d+,?\s*\d{4})',
+        r'admission\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
+    ]
+    
+    for pattern in admission_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            dates["admission_date"] = match.group(1).strip()
+            break
+    
+    # Discharge date patterns
+    discharge_patterns = [
+        r'discharge\s*date\s*[:\-]?\s*([A-Za-z]+\s+\d+,?\s*\d{4})',
+        r'discharged\s*(?:on)?\s*[:\-]?\s*([A-Za-z]+\s+\d+,?\s*\d{4})',
+        r'discharge\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
+    ]
+    
+    for pattern in discharge_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            dates["discharge_date"] = match.group(1).strip()
+            break
+    
+    # Bill/Prescription date - look for "Date: 05" followed by "April" and "2026"
+    # Handle OCR splitting date across lines
+    date_match = re.search(r'Date\s*[:\-]?\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})', text, re.IGNORECASE | re.DOTALL)
+    if not date_match:
+        # Try finding "05" near "Date:" then "April" and "2026" nearby
+        date_num = re.search(r'Date\s*[:\-]?\s*(\d{1,2})', text, re.IGNORECASE)
+        if date_num:
+            # Look for month and year within next 100 characters
+            context = text[date_num.start():date_num.start()+200]
+            month_year = re.search(r'(April|May|June|July|August|September|October|November|December|January|February|March)\s+.*?(\d{4})', context, re.IGNORECASE | re.DOTALL)
+            if month_year:
+                dates["prescription_date"] = f"{date_num.group(1)} {month_year.group(1)} {month_year.group(2)}"
+    else:
+        dates["prescription_date"] = f"{date_match.group(1)} {date_match.group(2)} {date_match.group(3)}"
+    
+    # If still no prescription date, look for any date pattern
+    if not dates["prescription_date"]:
+        for pattern in date_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                if len(match.groups()) == 3:
+                    if match.group(1).isdigit():
+                        # Format: day month year
+                        dates["prescription_date"] = f"{match.group(1)} {match.group(2)} {match.group(3)}"
+                    else:
+                        # Format: month day year
+                        dates["prescription_date"] = f"{match.group(2)} {match.group(1)} {match.group(3)}"
+                else:
+                    dates["prescription_date"] = match.group(1).strip()
+                break
+    
+    return dates
+
+
+def extract_hospital_info(text: str) -> Dict[str, Optional[str]]:
+    """Extract hospital/clinic information"""
+    hospital_info = {
+        "name": None,
+        "address": None,
+        "phone": None
+    }
+    
+    # Hospital name patterns
+    name_patterns = [
+        r'([\w\s]+(?:hospital|clinic|medical center|health center|care))',
+        r'^([A-Z][A-Za-z\s&]+(?:Hospital|Clinic|Medical|Care))',
+        r'hospital\s*[:\-]?\s*([A-Za-z\s]+)',
+    ]
+    
+    for pattern in name_patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            name = match.group(1).strip()
+            # Filter out noise
+            if len(name) > 3 and not any(x in name.lower() for x in ['date', 'patient', 'diagnosis']):
+                hospital_info["name"] = name
+                break
+    
+    # Phone number
+    phone_match = re.search(r'(?:phone|tel|contact)\s*[:\-]?\s*([\d\-\+\(\)\s]+)', text, re.IGNORECASE)
+    if phone_match:
+        hospital_info["phone"] = phone_match.group(1).strip()
+    
+    # Address patterns
+    address_patterns = [
+        r'address\s*[:\-]?\s*([^\n]+)',
+        r'(?:city|location)\s*[:\-]?\s*([A-Za-z\s]+)',
+    ]
+    
+    for pattern in address_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            hospital_info["address"] = match.group(1).strip()
+            break
+    
+    return hospital_info
+
+
+def extract_diagnosis(text: str) -> List[str]:
+    """Extract diagnosis information"""
+    diagnoses = []
+    
+    patterns = [
+        r'diagnosis\s*[:\-]?\s*([^\n]+)',
+        r'condition\s*[:\-]?\s*([^\n]+)',
+        r'diagnosed\s*with\s*[:\-]?\s*([^\n]+)',
+        r'patient\s*with\s*([^\n]+?)(?:\n|diagnosis)',
+        r'\(ICD-10[:\-]?\s*([^\)]+)\)',
+    ]
+    
+    for pattern in patterns:
+        matches = re.finditer(pattern, text, re.IGNORECASE)
+        for match in matches:
+            diagnosis = match.group(1).strip()
+            # Clean up
+            diagnosis = diagnosis.replace('(', '').replace(')', '').strip()
+            if len(diagnosis) > 3 and diagnosis not in diagnoses:
+                # Filter out noise
+                if not any(x in diagnosis.lower() for x in ['take', 'tablet', 'injection', 'protocol']):
+                    diagnoses.append(diagnosis)
+    
+    return diagnoses
+
+
+def extract_medications(text: str) -> List[Dict]:
+    """Extract medication information"""
+    medications = []
+    seen_meds = set()
+    
+    # Common medication patterns - look for actual drug names
+    med_patterns = [
+        r'(?:tab|tablet)\s+([A-Z][a-z]+(?:[A-Z][a-z]+)?)',  # Tab Paracetamol
+        r'(?:inj|injection)\s+([A-Z][a-z]+(?:[A-Z][a-z]+)?)',  # Inj PlateMax
+        r'(?:syp|syrup)\s+([A-Z][a-z]+(?:[A-Z][a-z]+)?)',  # Syp Electral
+        r'(?:cap|capsule)\s+([A-Z][a-z]+(?:[A-Z][a-z]+)?)',
+    ]
+    
+    # Known medication names to look for
+    known_meds = ['paracetamol', 'pantoprazole', 'platemax', 'electral', 'aspirin', 
+                  'ibuprofen', 'amoxicillin', 'azithromycin', 'metformin', 'insulin']
+    
+    # First, try pattern matching
+    for pattern in med_patterns:
+        matches = re.finditer(pattern, text, re.IGNORECASE)
+        for match in matches:
+            med_name = match.group(1).strip()
+            med_type = "Tablet" if "tab" in match.group(0).lower() else \
+                      "Injection" if "inj" in match.group(0).lower() else \
+                      "Syrup" if "syp" in match.group(0).lower() else "Capsule"
             
-            if len(all_nums) >= 2:
-                data["total_amount"] = {
-                    "total_billed": all_nums[0],
-                    "total_paid": all_nums[1],
-                    "outstanding_balance": all_nums[0] - all_nums[1]
-                }
-            continue
-
-        # 2. HANDLE SERVICES
-        for key, service_type in service_keywords.items():
-            if key in line_lower:
-                # We found a service! Now look ahead for numbers
-                amounts = []
-                # Look at the next 3 lines to find the 1-3 numbers associated with this service
-                for next_line_idx in range(i + 1, min(i + 5, len(lines))):
-                    # Check if the next line is another service keyword (stop if it is)
-                    if any(k in lines[next_line_idx].lower() for k in service_keywords.keys()):
-                        break
-                        
-                    found_nums = re.findall(r'\d[\d,\.ozs]*', lines[next_line_idx])
-                    for f in found_nums:
-                        val = clean_number(f)
-                        if val and val > 10: # filter out tiny noise
-                            amounts.append(val)
-                
-                if amounts:
-                    data["medications_and_services"].append({
-                        "item": line,
-                        "type": service_type,
-                        "billed_amount": amounts[0],
-                        "amount_paid": amounts[1] if len(amounts) > 1 else 0.0,
-                        "outstanding": amounts[2] if len(amounts) > 2 else amounts[0]
+            # Filter out numbers and common words
+            if len(med_name) > 3 and not med_name.lower() in ['three', 'tablet', 'twice', 'daily', 'once', 'take']:
+                if med_name.lower() not in seen_meds:
+                    seen_meds.add(med_name.lower())
+                    medications.append({
+                        "name": med_name,
+                        "type": med_type
                     })
-                break 
+    
+    # Second, look for known medication names anywhere in text
+    for known_med in known_meds:
+        if known_med in text.lower() and known_med not in seen_meds:
+            # Find the context to determine type
+            context_pattern = rf'(tab|tablet|inj|injection|syp|syrup|cap|capsule)?\s*{known_med}'
+            match = re.search(context_pattern, text, re.IGNORECASE)
+            if match:
+                med_type = "Tablet" if match.group(1) and "tab" in match.group(1).lower() else \
+                          "Injection" if match.group(1) and "inj" in match.group(1).lower() else \
+                          "Syrup" if match.group(1) and "syp" in match.group(1).lower() else \
+                          "Medication"
+                
+                seen_meds.add(known_med)
+                medications.append({
+                    "name": known_med.capitalize(),
+                    "type": med_type
+                })
+    
+    return medications
 
-    return data
+
+def extract_vital_signs(text: str) -> Dict:
+    """Extract vital signs"""
+    vitals = {}
+    
+    # Blood pressure
+    bp_match = re.search(r'(?:blood\s*pressure|bp)\s*[:\-]?\s*(\d+/\d+)', text, re.IGNORECASE)
+    if bp_match:
+        vitals["blood_pressure"] = bp_match.group(1)
+    
+    # Heart rate/pulse
+    pulse_match = re.search(r'(?:pulse|heart\s*rate|rutu)\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
+    if pulse_match:
+        vitals["pulse"] = f"{pulse_match.group(1)} bpm"
+    
+    # Temperature
+    temp_match = re.search(r'(?:temperature|temp)\s*[:\-]?\s*(\d+\.?\d*)', text, re.IGNORECASE)
+    if temp_match:
+        vitals["temperature"] = f"{temp_match.group(1)}°F"
+    
+    # Respiratory rate
+    resp_match = re.search(r'(?:respiratory\s*rate|resp)\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
+    if resp_match:
+        vitals["respiratory_rate"] = f"{resp_match.group(1)} /min"
+    
+    return vitals
+
+
+def parse_medical_text(raw_text: str) -> Dict:
+    """
+    Comprehensive medical document parser
+    Extracts: patient info, hospital info, diagnosis, medications, vital signs, etc.
+    """
+    
+    # Initialize structured data with all common fields
+    structured_data = {
+        # Patient Information
+        "patient_name": extract_patient_name(raw_text),
+        "age": extract_age(raw_text),
+        "gender": extract_gender(raw_text),
+        "medical_record_number": extract_medical_record_number(raw_text),
+        
+        # Hospital/Clinic Information
+        "hospital_info": extract_hospital_info(raw_text),
+        
+        # Dates
+        "dates": extract_dates(raw_text),
+        
+        # Medical Information
+        "diagnosis": extract_diagnosis(raw_text),
+        "medications": extract_medications(raw_text),
+        "vital_signs": extract_vital_signs(raw_text),
+        
+        # Additional fields
+        "ward_room": None,
+        "attending_physician": None,
+    }
+    
+    # Extract ward/room information
+    ward_match = re.search(r'(?:ward|room)\s*[:\-]?\s*([A-Za-z0-9\s]+?)(?:\n|$)', raw_text, re.IGNORECASE)
+    if ward_match:
+        structured_data["ward_room"] = ward_match.group(1).strip()
+    
+    # Extract doctor/physician name
+    doctor_patterns = [
+        r'(?:doctor|dr\.?|physician)\s*[:\-]?\s*([A-Za-z\s\.]+?)(?:\n|$|reg|mci)',
+        r'attending\s*[:\-]?\s*([A-Za-z\s\.]+?)(?:\n|$)',
+        r'dr[_\s]+([A-Za-z\s]+?)(?:\n|reg|mci)',
+        r'(?:mbbs|md)[,\s]+([A-Za-z\s]+)',
+    ]
+    
+    for pattern in doctor_patterns:
+        match = re.search(pattern, raw_text, re.IGNORECASE)
+        if match:
+            doctor_name = match.group(1).strip()
+            # Clean up
+            doctor_name = doctor_name.replace('_', ' ').strip()
+            if len(doctor_name) > 2 and not any(x in doctor_name.lower() for x in ['medicine', 'internal', 'reg', 'no']):
+                structured_data["attending_physician"] = doctor_name
+                break
+    
+    return structured_data
