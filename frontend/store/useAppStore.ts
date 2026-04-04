@@ -37,33 +37,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
   notifications: [],
   lastSyncAt: 0,
 
-  setClaims: (claims) => {
+  setClaims: (claims: Claim[]) => {
     set({ claims: dedupeById(claims), lastSyncAt: Date.now() });
   },
 
-  addClaim: (claim) => {
+  addClaim: (claim: Claim) => {
     const updated = dedupeById([claim, ...get().claims]);
     set({ claims: updated, lastSyncAt: Date.now() });
     localStorage.setItem(CLAIMS_KEY, JSON.stringify(updated));
   },
 
-  updateClaim: (id, updates) => {
+  updateClaim: (id: string, updates: Partial<Claim>) => {
     const updated = dedupeById(get().claims.map((claim) => (claim.id === id ? { ...claim, ...updates } : claim)));
     set({ claims: updated, lastSyncAt: Date.now() });
     localStorage.setItem(CLAIMS_KEY, JSON.stringify(updated));
   },
 
-  setNotifications: (notifications) => {
+  setNotifications: (notifications: Notification[]) => {
     set({ notifications: dedupeById(notifications), lastSyncAt: Date.now() });
   },
 
-  addNotification: (notification) => {
+  addNotification: (notification: Notification) => {
     const updated = dedupeById([notification, ...get().notifications]);
     set({ notifications: updated, lastSyncAt: Date.now() });
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
   },
 
-  markNotificationRead: (id) => {
+  markNotificationRead: (id: string) => {
     const alreadyRead = get().notifications.find((notification) => notification.id === id)?.read;
     if (alreadyRead) {
       return;
@@ -76,7 +76,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
   },
 
-  markAllNotificationsRead: (role, userId) => {
+  markAllNotificationsRead: (role: string, userId?: string) => {
     const updated = get().notifications.map((notification) => {
       const matchesRole = notification.targetRole === role || notification.targetRole === "all";
       const matchesUser = !notification.targetUserId || notification.targetUserId === userId;
