@@ -1,0 +1,14 @@
+# AI & LLM
+google-genai
+python-dotenv
+
+# OCR & Image Processing
+pytesseract
+pdf2image
+opencv-python
+Pillow
+pydantic
+
+# Utilities
+numpy
+requests
