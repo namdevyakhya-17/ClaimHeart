@@ -2,7 +2,6 @@
 fastapi
 uvicorn[standard]
 python-multipart
-pydantic
 
 # DATABASE
 sqlalchemy
@@ -20,7 +19,7 @@ python-dotenv
 pytesseract
 easyocr
 opencv-python
-pillow
+Pillow
 numpy
 
 # PDF PROCESSING
